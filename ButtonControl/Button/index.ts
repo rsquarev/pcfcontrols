@@ -2,10 +2,11 @@ import { IInputs, IOutputs } from "./generated/ManifestTypes";
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 import { ScriptButton, IScriptButtonProps } from './control';
+import { rejects } from "assert";
+import { resolve } from "dns";
 
 export class Button implements ComponentFramework.StandardControl<IInputs, IOutputs> {
 	private _container: HTMLDivElement;
-
 
 	private _props: IScriptButtonProps;
 	private _debug: string;
@@ -27,8 +28,8 @@ export class Button implements ComponentFramework.StandardControl<IInputs, IOutp
 	public init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void, state: ComponentFramework.Dictionary, container: HTMLDivElement) {
 		this._container = container;
 		// Add control initialization code		
-		this.setProps(context);
-		//ReactDOM.render(React.createElement(PrimaryButton, { text: this._props.text, disabled: this._props.disabled, onClick: () => { alert(`${this._props.text} clicked!!`) } }), this._container);
+		this.setProps(context)
+			.then(() => { this.renderComponent(); });
 	}
 	private renderComponent() {
 		ReactDOM.render(React.createElement(ScriptButton, this._props), this._container);
@@ -39,11 +40,43 @@ export class Button implements ComponentFramework.StandardControl<IInputs, IOutp
 			text: context.parameters.text.raw || '',
 			disabled: context.mode.isControlDisabled,
 			fabricIcon: context.parameters.fabricIconName.raw || 'Bug',
-			onClick: this.createOnClickHandler()
 		};
+		const functionName: string = context.parameters.functionName.raw!;
+		const webResource: string = context.parameters.webResource.raw!;
+		return new Promise((resolve, reject) => {
+			if (!webResource || !functionName) {
+				this._props.onClick = () => { };
+				console.error('Button control onClick has no action.');
+				resolve();
+			}
+			else {
+				this.loadScript(webResource).then(() => {
+					const buttonClickHandler = new Function(`${functionName}()`);
+					this._props.onClick = () => { buttonClickHandler(); }
+					resolve();
+				});
+			}
+		});
 	}
-	private createOnClickHandler() {
-		return () => { alert(`${this._props.text}. ${this._props.fabricIcon} Debug:${this._debug}`); }
+	private loadScript(webResource: string) {
+		const oldscript = document.getElementById('buttonOnClick');
+		if (oldscript) {
+			oldscript.remove();
+		}
+		const script = document.createElement('script');
+		script.type = 'text/javascript';
+		script.async = false;
+		script.id = 'buttonOnClick';
+		script.src = webResource;
+		document.head.appendChild(script);
+		return new Promise((resolve, reject) => {
+			script.onload = () => {
+				resolve();
+			}
+			script.onerror = (message) => {
+				reject(message);
+			}
+		});
 	}
 	/**
 	 * Called when any value in the property bag has changed. This includes field values, data-sets, global values such as container height and width, offline status, control metadata values such as label, visible, etc.
@@ -51,16 +84,20 @@ export class Button implements ComponentFramework.StandardControl<IInputs, IOutp
 	 */
 	public updateView(context: ComponentFramework.Context<IInputs>): void {
 		// Add code to update control view		
-		// if (context.updatedProperties.includes("text")) {
-		// 	this._props.text = context.parameters.text.raw || '_ButtonText_';
-		// }
-		// if (context.updatedProperties.includes("fabricIconName")) {
-		// 	this._props.fabricIcon = context.parameters.fabricIconName.raw || "BugWarning";
+		// if (context.updatedProperties && context.updatedProperties.length > 0) {
+		// 	if (context.updatedProperties.includes("text")) {
+		// 		this._props.text = context.parameters.text.raw || '_ButtonText_';
+		// 	}
+		// 	if (context.updatedProperties.includes("fabricIconName")) {
+		// 		this._props.fabricIcon = context.parameters.fabricIconName.raw || "BugWarning";
+		// 	}
 		// }
 		// this._props.disabled = context.mode.isControlDisabled;
-		this.setProps(context);
+		this.setProps(context)
+			.then(() => { this.renderComponent(); });
 		//this._debug = `isTextUpdated:${context.updatedProperties.join('|')}`;
-		this.renderComponent();
+		//this.renderComponent();
+
 	}
 
 	/** 

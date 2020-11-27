@@ -6,7 +6,7 @@ export interface IScriptButtonProps {
     text: string,
     disabled?: boolean,
     fabricIcon: string,
-    onClick: () => void
+    onClick?: () => void
 }
 
 export const ScriptButton: React.FunctionComponent<IScriptButtonProps> = props => {
